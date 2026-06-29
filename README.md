@@ -46,14 +46,25 @@ opendataloader-pdf-hybrid --port 5002 --ocr-lang "ko,en"
 # .env: GIROK_ODL_HYBRID=http://localhost:5002  또는 hybrid 백엔드명
 ```
 
-## 설정
+## 설정 (온보딩)
 
-`.env.example` → `.env` 복사 후:
+자세한 단계는 **[`docs/SETUP.md`](docs/SETUP.md)**. 요약:
+
+```bash
+python -m girokhyeong_mcp.setup --init     # .env 생성
+# .env 에 LAW_API_KEY=<OC값> 입력  (open.law.go.kr OPEN API 신청 → 이메일 아이디가 OC 값)
+python -m girokhyeong_mcp.setup --check    # 라이브 검증(법령 1건 실제 조회)
+python -m girokhyeong_mcp.setup            # 전체 상태 점검 + 다음 할 일 안내
+```
+
+`.env`(cwd 또는 리포 루트)는 서버가 자동으로 읽는다. 환경변수로 직접 줘도 된다(환경변수 우선).
 
 ```
 LAW_API_KEY=...          # 필수. open.law.go.kr OPEN API 신청 → 이메일 ID가 OC 값
 ANTHROPIC_API_KEY=...    # 선택. solve_record auto 모드(서버 내부 자동 진행)에만
 ```
+
+MCP 클라이언트 등록 후 **`check_setup`** 도구를 호출하면 키가 살아있는지 즉시 확인된다.
 
 MCP 클라이언트(예: Claude Code) 등록:
 

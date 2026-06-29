@@ -25,6 +25,7 @@ all = ["opendataloader-pdf>=0.3", "pdfplumber>=0.11", "python-docx>=1.1", "anthr
 
 [project.scripts]
 girokhyeong-mcp = "girokhyeong_mcp.server:main"
+girokhyeong-setup = "girokhyeong_mcp.setup:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

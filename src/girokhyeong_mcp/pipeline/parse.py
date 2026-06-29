@@ -288,14 +288,16 @@ def parse_record(source: str, out_root: str | None = None, *, engine: str = "aut
     """사건기록 폴더 또는 단일 PDF → 인벤토리 + 청크 추출본.
 
     source: 폴더(여러 PDF) 또는 단일 PDF 경로.
-    out_root: 추출본 저장 루트. 미지정 시 work_root()/{case_id}/_추출.
+    out_root: 산출 루트. 추출본은 (out_root 또는 work_root())/{case_id}/_추출 에 저장된다 —
+              단계파일(00~06)이 들어가는 run_dir(=루트/{case_id})과 같은 하위라 사건별로 격리된다.
     """
     src = Path(source)
     pdfs = sorted(src.glob("*.pdf")) if src.is_dir() else [src]
     pdfs = [p for p in pdfs if p.is_file() and p.suffix.lower() == ".pdf"]
     case_id = (src.name if src.is_dir() else src.stem) or "사건"
 
-    out_base = Path(out_root) if out_root else (config.work_root() / case_id)
+    # 추출본을 항상 {루트}/{case_id}/_추출 에 둬 단계파일(run_dir=루트/case_id)과 정합 + 사건별 격리
+    out_base = (Path(out_root) / case_id) if out_root else (config.work_root() / case_id)
     extract_dir = out_base / "_추출"
     extract_dir.mkdir(parents=True, exist_ok=True)
 
@@ -322,6 +324,7 @@ def parse_record(source: str, out_root: str | None = None, *, engine: str = "aut
         res.inventory.append(meta)
 
         first_chunk_pages: list[tuple[int, str]] = []
+        extracted_any = False
         page = 1
         while page <= total:
             ce = min(page + chunk_size - 1, total)
@@ -330,30 +333,38 @@ def parse_record(source: str, out_root: str | None = None, *, engine: str = "aut
                 res.chunk_files.append(str(out_path))
                 page = ce + 1
                 continue
+            # 청크별 실제 사용 엔진(폴백 시 라벨/주의문구를 실제 엔진으로 정확히 기록)
+            chunk_eng, chunk_label, chunk_caveat = eng, label, caveat
             try:
                 pages = extract(str(pdf), page, ce)
             except EngineUnavailable as e:
-                # 런타임 폴백
-                res.warnings.append(f"{pdf.name}: {eng} 실패({e}) → pymupdf 폴백")
+                res.warnings.append(f"{pdf.name} p.{page}-{ce}: {eng} 실패({e}) → pymupdf 폴백")
                 pages = extract_pymupdf(str(pdf), page, ce)
+                chunk_eng = "pymupdf"
+                chunk_label, chunk_caveat = ENGINE_META["pymupdf"]
+            extracted_any = True
             if not first_chunk_pages:
                 first_chunk_pages = pages
             front = md.ocr_frontmatter(book=prefix, author="", subject=subject,
                                        start=page, end=ce, source=pdf.name,
-                                       engine_label=label, caveat=caveat)
-            title = f"# {prefix} — p.{page}-{ce} [{eng} 미교정]\n"
+                                       engine_label=chunk_label, caveat=chunk_caveat)
+            title = f"# {prefix} — p.{page}-{ce} [{chunk_eng} 미교정]\n"
             body = md.assemble_pages(pages)
             out_path.write_text(front + "\n" + title + "\n" + body + "\n", encoding="utf-8")
             res.chunk_files.append(str(out_path))
             page = ce + 1
 
-        if _looks_scanned(first_chunk_pages):
+        if extracted_any and _looks_scanned(first_chunk_pages):
             res.scanned_pdfs.append(pdf.name)
+        elif not extracted_any and total:
+            # 전 청크가 재개 스킵 → 표본이 없어 스캔 판정 보류(이전 실행에서 이미 경고됐을 것)
+            res.warnings.append(f"{pdf.name}: 전 청크 재개 스킵 — 스캔본 판정 생략(이전 산출 확인 권장)")
 
-    if res.scanned_pdfs and eng != "opendataloader":
+    # hybrid OCR 가 없으면(=텍스트레이어 부재 스캔본은 빈 텍스트로 남음) 실제 엔진과 무관하게 경고
+    if res.scanned_pdfs and not config.odl_hybrid_url():
         res.warnings.append(
             "스캔본 추정: " + ", ".join(res.scanned_pdfs) +
-            " — 텍스트레이어 부재. opendataloader hybrid OCR(GIROK_ODL_HYBRID) 또는 별도 OCR 필요.")
+            " — 텍스트레이어 부재. opendataloader hybrid OCR(GIROK_ODL_HYBRID 설정) 또는 별도 OCR 필요.")
 
     res.scope = "full_read" if res.total_pages <= config.FULL_READ_PAGE_THRESHOLD else "index_priority"
     return res

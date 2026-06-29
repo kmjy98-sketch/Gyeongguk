@@ -41,6 +41,28 @@ def server_info() -> dict:
     }
 
 
+@mcp.tool()
+def check_setup() -> dict:
+    """LAW_API_KEY 라이브 검증 — 키로 법령 1건을 실제 조회해 동작 여부를 확인한다.
+
+    키 미설정/오타/미승인을 구분해 다음 할 일을 안내한다. 처음 시작할 때 가장 먼저 호출.
+    """
+    key = config.law_api_key()
+    if not key:
+        return {"ready": False, "law_api_key": False,
+                "다음할일": "LAW_API_KEY 발급(open.law.go.kr OPEN API 활용신청 → 이메일 아이디가 OC값) 후 "
+                          ".env 에 LAW_API_KEY=<값> 작성. CLI: python -m girokhyeong_mcp.setup --init"}
+    probe = law_api.search_law("민법", page_size=1)
+    if "error" in probe:
+        return {"ready": False, "law_api_key": True, "error": probe["error"],
+                "다음할일": "키 오타·미승인·네트워크 확인. 승인 직후면 잠시 후 재시도."}
+    sample = (probe.get("laws") or [{}])[0].get("법령명")
+    masked = (key[:2] + "***") if len(key) > 2 else "***"   # 자격증명 원문 노출 금지(마스킹)
+    return {"ready": True, "law_api_key": True, "oc_masked": masked,
+            "probe": {"total": probe.get("total"), "first": sample},
+            "note": "법령 API 정상. precedent_search·verify_case·verify_brief 사용 가능."}
+
+
 # ══ 파싱 ═════════════════════════════════════════════════════
 @mcp.tool()
 def parse_record(source: str, out_root: str | None = None, engine: str = "auto",
@@ -193,10 +215,15 @@ def solve_record(source: str, brief_type: str | None = None, party_side: str | N
 
 
 # ══ 프롬프트 ═════════════════════════════════════════════════
+def _truthy(s: str) -> bool:
+    """프롬프트 문자열 인자 → bool. 'false'·'0'·'no'·'아니오' 등은 False."""
+    return str(s).strip().lower() in ("1", "true", "y", "yes", "다툼없음", "명시", "t")
+
+
 @mcp.prompt(title="기록형: 사실관계 정리")
 def girok_facts(party_side: str = "", dispute_known: str = "") -> str:
-    """사실관계 정리(타임라인·대비표·증거·불일치·사실관계도) 가이드."""
-    return stages.facts_guide(party_side or None, bool(dispute_known))
+    """사실관계 정리(타임라인·대비표·증거·불일치·사실관계도) 가이드. dispute_known='다툼없음'이면 D·E 생략."""
+    return stages.facts_guide(party_side or None, _truthy(dispute_known))
 
 
 @mcp.prompt(title="기록형: 청구추출")

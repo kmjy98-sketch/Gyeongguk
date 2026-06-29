@@ -7,6 +7,44 @@ from pathlib import Path
 # ── 패키지 경로 ──────────────────────────────────────────────
 PKG_DIR = Path(__file__).resolve().parent
 RESOURCES_DIR = PKG_DIR / "resources"
+REPO_ROOT = PKG_DIR.parent.parent          # src/girokhyeong_mcp → 리포 루트
+
+
+def _autoload_dotenv() -> None:
+    """`.env` 를 찾아 os.environ 에 주입(이미 설정된 값은 보존 — env 우선).
+
+    표준 라이브러리만 사용(python-dotenv 의존 없음). 탐색 순서:
+    현재 작업디렉터리 → 리포 루트 → GIROK_DOTENV(명시 경로). 이 덕분에 사용자는
+    `.env` 에 LAW_API_KEY 만 넣으면 바로 서버를 시작할 수 있다.
+    """
+    candidates = [Path.cwd() / ".env", REPO_ROOT / ".env"]
+    explicit = os.environ.get("GIROK_DOTENV", "").strip()
+    if explicit:
+        candidates.insert(0, Path(explicit))
+    seen = set()
+    for path in candidates:
+        try:
+            rp = path.resolve()
+        except OSError:
+            continue
+        if rp in seen or not rp.is_file():
+            continue
+        seen.add(rp)
+        try:                                # 권한거부·파일잠금 등으로 서버 기동이 막히지 않게(편의 기능)
+            content = rp.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in content.splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or "=" not in s:
+                continue
+            k, v = s.split("=", 1)
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and k not in os.environ:   # env 가 .env 보다 우선
+                os.environ[k] = v
+
+
+_autoload_dotenv()
 
 # ── 환경변수 ─────────────────────────────────────────────────
 LAW_API_KEY_ENV = "LAW_API_KEY"

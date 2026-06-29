@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from .. import law_api
+from .. import config, law_api
 
 # 제출 전 체크리스트 (독립판 §8 + 가인 E절)
 CHECKLIST = [
@@ -34,7 +34,8 @@ def verify_brief(text_or_path: str) -> dict:
 
     vt = law_api.verify_text(text)
     unverified = vt.get("unverified", [])
-    if "error" in str(vt.get("case_results")) or "LAW_API_KEY 없음" in str(vt):
+    # 게이트: 키/네트워크 부재(검증 자체 불가) → '키없음'을 '보류'와 구별
+    if not config.law_api_key() or vt.get("api_error"):
         gate = "키없음"
     elif unverified:
         gate = "보류"  # 미검증 인용 존재 → 본문 인용 강등 필요

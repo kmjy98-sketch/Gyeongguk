@@ -180,18 +180,26 @@ def verify_text(text):
     """산출물 텍스트에서 사건번호·'법령 제N조'를 추출해 일괄검증 (#13·#45-C 종단 검증 훅)."""
     cases = sorted(set(_CASE_RE.findall(text)))
     arts = sorted(set(_ART_RE.findall(text)))  # (법령명, 조문번호)
-    out = {"case_results": [], "article_results": [], "unverified": []}
+    out = {"case_results": [], "article_results": [], "unverified": [], "api_error": None}
     for c in cases:
         r = verify_case(c)
-        out["case_results"].append({"사건번호": c, "verified": bool(r.get("verified")),
-                                    "사건명": r.get("사건명")})
+        row = {"사건번호": c, "verified": bool(r.get("verified")), "사건명": r.get("사건명")}
+        if r.get("error"):                       # 키부재·네트워크 오류는 산출에 보존(인용 가짜와 구별)
+            row["error"] = r["error"]
+            out["api_error"] = out["api_error"] or r["error"]
+        out["case_results"].append(row)
         if not r.get("verified"):
             out["unverified"].append("판례 " + c)
     for (lname, jo) in arts:
         r = verify_article(lname, jo)
         av = r.get("조문검증", {})
         ok = bool(r.get("verified")) and av.get("verified", True)
-        out["article_results"].append({"법령": lname, "조": "제%s조" % jo, "verified": ok})
+        row = {"법령": lname, "조": "제%s조" % jo, "verified": ok}
+        err = r.get("error") or av.get("error")
+        if err:
+            row["error"] = err
+            out["api_error"] = out["api_error"] or err
+        out["article_results"].append(row)
         if not ok:
             out["unverified"].append("%s 제%s조" % (lname, jo))
     out["summary"] = "사건번호 %d / 조문 %d / 미검증 %d" % (
