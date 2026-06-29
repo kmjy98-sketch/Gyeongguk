@@ -1,0 +1,12 @@
+# ── 필수 ─────────────────────────────────────────────────────
+mcp>=1.2.0
+PyMuPDF>=1.24.0          # 디지털 PDF 추출 폴백 + 페이지 분리(어댑터)
+
+# ── 권장(없어도 폴백 동작) ───────────────────────────────────
+# opendataloader-pdf 는 Java 11+ 가 PATH 에 있어야 동작한다(Adoptium 등).
+opendataloader-pdf>=0.3  ; python_version >= "3.10"
+pdfplumber>=0.11         # 텍스트레이어 추가 폴백
+
+# ── 선택(해당 기능 사용 시) ──────────────────────────────────
+python-docx>=1.1         # export_docx (제출본 docx 변환)
+anthropic>=0.40          # solve_record auto 모드(서버 내부 LLM 실행)

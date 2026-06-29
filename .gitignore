@@ -1,0 +1,43 @@
+# ── 비밀/자격증명 (절대 커밋 금지) ───────────────────────────
+.env
+.env.local
+*.key
+**/secrets/**
+
+# ── 사건기록·산출물 (민감/저작권 — public repo 제외) ──────────
+/cases/
+/work/
+/runs/
+/outputs/
+*_추출/
+사건기록/
+사건기록*/
+*.사건/
+
+# 산출 서면·변환물
+*.docx
+*.hwp
+*.hwpx
+*.pdf
+!docs/**/*.pdf          # 문서용 다이어그램 등만 예외 허용
+
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ── OS / 에디터 ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/

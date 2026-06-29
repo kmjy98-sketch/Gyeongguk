@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "girokhyeong-mcp"
+version = "0.1.0"
+description = "기록형(사건기록→법률서면) 풀이 MCP 서버 — 파싱·사실관계·청구추출·법리·법령API검증·작성 파이프라인"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "kmjy98-sketch" }]
+keywords = ["mcp", "legal", "korean-law", "변호사시험", "기록형", "사건기록"]
+
+dependencies = [
+    "mcp>=1.2.0",
+    "PyMuPDF>=1.24.0",
+]
+
+[project.optional-dependencies]
+ocr = ["opendataloader-pdf>=0.3", "pdfplumber>=0.11"]
+docx = ["python-docx>=1.1"]
+auto = ["anthropic>=0.40"]
+all = ["opendataloader-pdf>=0.3", "pdfplumber>=0.11", "python-docx>=1.1", "anthropic>=0.40"]
+
+[project.scripts]
+girokhyeong-mcp = "girokhyeong_mcp.server:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+girokhyeong_mcp = ["resources/*.json", "resources/*.md"]
