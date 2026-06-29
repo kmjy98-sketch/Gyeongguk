@@ -89,3 +89,44 @@ def run_auto(*, case_dir: str, pr, brief_type, party_side, format_analysis) -> d
     save("review", review)
 
     return out
+
+
+def _client_model():
+    import anthropic
+    return anthropic.Anthropic(api_key=config.anthropic_api_key()), config.auto_model()
+
+
+def run_auto_case(*, case_dir: str, case_id: str, problem: str, party_side) -> dict:
+    """사례형: 사실관계→청구추출→포섭격자→IRAC 답안→검토."""
+    client, model = _client_model()
+    out: dict[str, str] = {}
+
+    def save(stage, content):
+        out[stage] = storage.save_stage(case_dir, stage, content, case_id=case_id, party_side=party_side)
+
+    facts = _call(client, model, stages.facts_guide(party_side),
+                  f"[사례 문제]\n{problem}\n\n사실관계 정리(A~F)를 출력하라.")
+    save("facts", facts)
+    claims = _call(client, model, stages.claims_guide(party_side, None),
+                   f"[사실관계]\n{facts}\n\n청구추출 + 요건 매치업 매트릭스 + 갭 목록을 출력하라.")
+    save("claims", claims)
+    sub = _call(client, model, stages.subsumption_guide(),
+                f"[청구추출]\n{claims}\n\n포섭격자(요건×사실 충족여부) + 포섭 결론을 출력하라.")
+    save("subsumption", sub)
+    answer = _call(client, model, stages.case_answer_guide(party_side),
+                   f"[사실관계]\n{facts}\n\n[포섭]\n{sub}\n\n위로 사례형 IRAC 답안을 작성하라.", max_tokens=12000)
+    save("case_answer", answer)
+    review = _call(client, model, stages.review_guide(),
+                   f"[답안]\n{answer}\n\n논리·포섭 5축으로 적대검토하고 verdict 를 내라.")
+    save("review", review)
+    return out
+
+
+def run_auto_consult(*, case_dir: str, case_id: str, question: str) -> dict:
+    """일반 상담: IRAC 상담의견(면책 포함)."""
+    client, model = _client_model()
+    ans = _call(client, model, stages.consult_guide(),
+                f"[질문]\n{question}\n\n위 질문에 IRAC 상담의견을 작성하라(면책 고지 포함). "
+                f"확신 없는 사건번호는 [검증필요]로 표기.", max_tokens=8000)
+    path = storage.save_stage(case_dir, "consult", ans, case_id=case_id)
+    return {"consult": path}

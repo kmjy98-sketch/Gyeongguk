@@ -214,6 +214,47 @@ def solve_record(source: str, brief_type: str | None = None, party_side: str | N
         engine=engine, out_root=out_root, auto=auto)
 
 
+# ══ 포섭·사례·상담 ═══════════════════════════════════════════
+@mcp.tool()
+def list_claims() -> list[dict]:
+    """요건사실 카탈로그 색인(청구권·항변·범죄별 {domain,key,name,law}). subsumption_grid 의 key 선택용."""
+    return resources.claims_index()
+
+
+@mcp.tool()
+def subsumption_grid(claim_keys: list[str]) -> dict:
+    """청구권/항변/범죄 key(또는 명칭) 목록 → 포섭격자 템플릿 + 요건·증명책임(포섭 여부 분석의 결정적 입력).
+
+    각 청구의 성립요건을 카탈로그에서 로드해, 사실을 요건에 대입(충족/불충족)할 격자를 반환한다.
+    key 를 모르면 먼저 list_claims 를 호출하라.
+    """
+    return resources.requirement_grid(claim_keys)
+
+
+@mcp.tool()
+def solve_case(problem: str, party_side: str | None = None, out_root: str | None = None,
+               case_id: str | None = None, auto: bool = False) -> dict:
+    """사례형 문제(텍스트 또는 파일 경로) → 사실관계·청구추출·포섭격자·IRAC 답안·검토(단계별 파일 생성).
+
+    problem: 사례 문제 본문 텍스트, 또는 .txt/.md/.pdf 파일 경로.
+    party_side: 답안 작성 입장(원고/피고/검사/변호인 등). 미정이면 양측 분석.
+    auto=True + ANTHROPIC_API_KEY 면 서버가 답안까지 자동 생성.
+    """
+    return orchestrator.solve_case(problem, party_side=party_side, out_root=out_root,
+                                   case_id=case_id, auto=auto)
+
+
+@mcp.tool()
+def consult(question: str, facts: str | None = None, out_root: str | None = None,
+            case_id: str | None = None, auto: bool = False) -> dict:
+    """일반 법률 상담 — 질문 → 쟁점·법령/판례 검증(law_api) → IRAC 상담의견(+면책 고지).
+
+    일반 정보 제공이며 변호사 자문을 대체하지 않는다(답변 말미 면책 고지 강제).
+    facts: 있으면 사실관계 추가. auto=True + 키 면 상담의견 자동 생성.
+    """
+    return orchestrator.consult(question, facts=facts, out_root=out_root, case_id=case_id, auto=auto)
+
+
 # ══ 프롬프트 ═════════════════════════════════════════════════
 def _truthy(s: str) -> bool:
     """프롬프트 문자열 인자 → bool. 'false'·'0'·'no'·'아니오' 등은 False."""
@@ -254,6 +295,24 @@ def girok_draft(brief_type: str = "", party_side: str = "") -> str:
 def girok_review() -> str:
     """제출 전 2층 검토(정확성 게이트 + 논리·포섭 5축) 가이드."""
     return stages.review_guide()
+
+
+@mcp.prompt(title="포섭 여부 분석")
+def girok_subsume() -> str:
+    """포섭 여부 분석(요건×사실 충족 격자) 가이드. subsumption_grid 도구와 함께 사용."""
+    return stages.subsumption_guide()
+
+
+@mcp.prompt(title="사례형 답안")
+def girok_case(party_side: str = "") -> str:
+    """사례형 IRAC 답안 작성 가이드(시험답안 산문)."""
+    return stages.case_answer_guide(party_side or None)
+
+
+@mcp.prompt(title="법률 상담")
+def girok_consult() -> str:
+    """일반 법률 상담(질문→검증→IRAC 상담의견+면책) 가이드."""
+    return stages.consult_guide()
 
 
 def main() -> None:

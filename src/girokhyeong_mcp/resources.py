@@ -78,6 +78,63 @@ def claim_elements(claim_key: str) -> dict:
     return {}
 
 
+def claims_index() -> list[dict]:
+    """요건 카탈로그 색인 — {domain, key, name, law}. 청구권/항변/구성요건 선택용."""
+    cat = load_claim_catalog()
+    out = []
+    for group in cat.get("groups", []):
+        for item in group.get("claims", []):
+            out.append({"domain": group.get("domain", ""), "key": item.get("key"),
+                        "name": item.get("name"), "law": item.get("law")})
+    return out
+
+
+def _find_claim(key_or_name: str) -> dict | None:
+    """key 정확일치 → name 부분일치 순으로 청구 항목을 찾는다."""
+    cat = load_claim_catalog()
+    items = [i for g in cat.get("groups", []) for i in g.get("claims", [])]
+    for it in items:
+        if it.get("key") == key_or_name:
+            return it
+    for it in items:
+        if key_or_name and key_or_name in (it.get("name") or ""):
+            return it
+    return None
+
+
+def requirement_grid(claim_keys: list[str]) -> dict:
+    """청구권/항변/범죄 key(또는 명칭) 목록 → 포섭격자 템플릿 + 요건·증명책임 데이터.
+
+    '포섭 여부' 분석의 결정적 입력: 각 청구의 성립요건을 카탈로그에서 로드해, LLM이 사실을
+    각 요건에 대입(충족/불충족)할 격자 마크다운과 구조화 데이터를 함께 반환한다.
+    """
+    found, missing = [], []
+    for k in claim_keys:
+        it = _find_claim(k)
+        (found.append(it) if it else missing.append(k))
+
+    blocks = []
+    for it in found:
+        rows = ["| 요건 | 충족 사실(출처+원문 발췌) | 반대·불리 사실 | 충족여부 | 증명책임 |",
+                "|---|---|---|---|---|"]
+        for el in it.get("elements", []):
+            rows.append(f"| {el} | [GAP] | — | 충족/일부/다툼/공백/불명 | {it.get('burden','')[:24]} |")
+        blocks.append(
+            f"### {it.get('name')} ({it.get('law','')})\n"
+            f"- 증명책임: {it.get('burden','')}\n"
+            f"- 트리거 사실: {it.get('triggers','')}\n\n" + "\n".join(rows))
+
+    return {
+        "claims": [{"key": it.get("key"), "name": it.get("name"), "law": it.get("law"),
+                    "elements": it.get("elements", []), "burden": it.get("burden", "")} for it in found],
+        "missing": missing,
+        "grid_markdown": "\n\n".join(blocks) if blocks else "",
+        "지침": ("각 요건 행의 [GAP]에 충족 사실을 기록 원문 발췌+출처로 채운다. 사실이 없으면 '공백'으로 "
+                "두고 지어내지 않는다(R1·R2). 충족여부 enum: 충족/일부/다툼/공백/불명. 증명책임 진 측이 "
+                "공백이면 그 측 패소위험. 미발견 청구(missing)는 list_claims 로 key 를 확인하라."),
+    }
+
+
 def missing_resources() -> list[str]:
     """배치 안 된 리소스 목록(기동 시 경고용)."""
     want = ["rules.md", "claim_catalog.json", "brief_templates.json", "review_axes.json"]

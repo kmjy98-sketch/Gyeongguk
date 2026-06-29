@@ -95,6 +95,12 @@ STAGE_FILES = {
     "authorities": "04_조문판례.md",
     "draft": "05_답안.md",
     "review": "06_검토.md",
+    # 사례 풀이(solve_case) / 일반 상담(consult)
+    "case_problem": "00_문제.md",
+    "subsumption": "03_포섭격자.md",
+    "case_answer": "04_답안.md",
+    "question": "00_질문.md",
+    "consult": "01_상담의견.md",
 }
 
 # 서면 형식 기본값 (독립판 §7 / 가인 §D — 지시문이 있으면 지시문 우선)

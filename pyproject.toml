@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "girokhyeong-mcp"
 version = "0.1.0"
-description = "기록형(사건기록→법률서면) 풀이 MCP 서버 — 파싱·사실관계·청구추출·법리·법령API검증·작성 파이프라인"
+description = "한국 법률 추론 MCP 서버 — 기록형(사건기록→서면)·사례형(IRAC 답안)·법률상담. 포섭격자·법령API 검증 내장"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

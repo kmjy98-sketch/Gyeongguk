@@ -52,6 +52,29 @@ def test_verify_text_extracts_citations():
     assert any("2020도6874" == c["사건번호"] for c in out["case_results"])
 
 
+def test_verify_brief_gate_distinguishes_no_key():
+    import os
+    os.environ.pop("LAW_API_KEY", None)
+    from girokhyeong_mcp.pipeline import verify as V
+    r = V.verify_brief("대법원 2003다26051 판결, 민법 제750조")
+    assert r["gate"] == "키없음"   # 키 부재를 '보류'와 구별
+
+
+def test_subsumption_grid_loads_requirements():
+    from girokhyeong_mcp import resources as R
+    rg = R.requirement_grid(["tort", "self_defense", "없는키"])
+    assert {c["key"] for c in rg["claims"]} == {"tort", "self_defense"}
+    assert rg["missing"] == ["없는키"]
+    assert "| 요건 |" in rg["grid_markdown"]
+
+
+def test_case_and_consult_guides_build():
+    from girokhyeong_mcp.pipeline import stages
+    assert "IRAC" in stages.case_answer_guide("원고 측")
+    g = stages.consult_guide()
+    assert "면책" in g or "대체하지" in g    # 면책 고지 포함
+
+
 if __name__ == "__main__":
     fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for fn in fns:

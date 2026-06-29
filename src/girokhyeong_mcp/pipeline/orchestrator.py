@@ -106,3 +106,91 @@ def solve_record(source: str, *, brief_type: str | None = None, party_side: str 
                      "산출물을 만들고 save_stage(stage=step.stage, ...)로 저장. authorities·review step 은 "
                      "step.tools(precedent_search·verify_case·verify_brief 등)를 호출해 진위를 코드로 검증한다.")
     return common
+
+
+# ── 사례 풀이 (text/file 문제 → IRAC 답안) ───────────────────
+
+def _resolve_problem(problem: str, case_id: str | None, out_root: str | None) -> tuple[str, str]:
+    """problem 이 파일경로면 읽기(pdf 는 추출), 아니면 텍스트로 취급. (본문, case_id) 반환."""
+    p = Path(problem)
+    try:
+        is_file = p.is_file()
+    except OSError:
+        is_file = False
+    if is_file:
+        if p.suffix.lower() == ".pdf":
+            pr = parse_mod.parse_record(str(p), out_root=out_root)
+            chunks = [Path(f).read_text(encoding="utf-8", errors="replace") for f in pr.chunk_files]
+            return "\n\n".join(chunks), (case_id or pr.case_id)
+        return p.read_text(encoding="utf-8", errors="replace"), (case_id or p.stem)
+    return problem, (case_id or "사례")
+
+
+def solve_case(problem: str, *, party_side: str | None = None, out_root: str | None = None,
+               case_id: str | None = None, auto: bool = False) -> dict:
+    """사례형 문제(텍스트 또는 파일) → 사실관계·청구추출·포섭격자·IRAC 답안·검토."""
+    text, case_id = _resolve_problem(problem, case_id, out_root)
+    case_dir = str(storage.run_dir(case_id, out_root))
+    prob_path = storage.save_stage(case_dir, "case_problem", text, case_id=case_id, party_side=party_side)
+
+    common = {"mode": "case", "case_id": case_id, "case_dir": case_dir, "problem_file": prob_path}
+
+    steps = [
+        {"stage": "facts", "guide": stages.facts_guide(party_side, False),
+         "input": prob_path, "save_as": config.STAGE_FILES["facts"]},
+        {"stage": "claims", "guide": stages.claims_guide(party_side, None),
+         "input": storage.stage_path(case_dir, "facts"), "save_as": config.STAGE_FILES["claims"]},
+        {"stage": "subsumption", "guide": stages.subsumption_guide(),
+         "input": storage.stage_path(case_dir, "claims"),
+         "tools": ["list_claims", "subsumption_grid", "verify_article", "verify_case"],
+         "save_as": config.STAGE_FILES["subsumption"]},
+        {"stage": "case_answer", "guide": stages.case_answer_guide(party_side),
+         "input": [storage.stage_path(case_dir, s) for s in ("facts", "subsumption")],
+         "save_as": config.STAGE_FILES["case_answer"]},
+        {"stage": "review", "guide": stages.review_guide(),
+         "input": storage.stage_path(case_dir, "case_answer"),
+         "tools": ["verify_brief"], "save_as": config.STAGE_FILES["review"]},
+    ]
+
+    if auto and config.anthropic_api_key():
+        from .auto_runner import run_auto_case
+        common["auto"] = True
+        common["stage_files"] = run_auto_case(case_dir=case_dir, case_id=case_id, problem=text,
+                                              party_side=party_side)
+        common["verify"] = verify_mod.verify_brief(storage.stage_path(case_dir, "case_answer"))
+        return common
+
+    common["auto"] = False
+    common["playbook"] = steps
+    common["지침"] = ("step 순서대로: facts→claims→subsumption(list_claims/subsumption_grid 로 요건 로드 후 "
+                     "사실 대입)→case_answer(IRAC)→review. 각 단계 save_stage 로 저장. 조문·판례는 verify_*.")
+    return common
+
+
+# ── 일반 법률 상담 ───────────────────────────────────────────
+
+def consult(question: str, *, facts: str | None = None, out_root: str | None = None,
+            case_id: str | None = None, auto: bool = False) -> dict:
+    """법률 질문 → 쟁점·법령/판례 검증·IRAC 상담의견(면책 포함)."""
+    case_id = case_id or "상담"
+    case_dir = str(storage.run_dir(case_id, out_root))
+    q_body = question + (f"\n\n[사실관계]\n{facts}" if facts else "")
+    q_path = storage.save_stage(case_dir, "question", q_body, case_id=case_id)
+
+    common = {"mode": "consult", "case_id": case_id, "case_dir": case_dir, "question_file": q_path}
+
+    if auto and config.anthropic_api_key():
+        from .auto_runner import run_auto_consult
+        common["auto"] = True
+        common["stage_files"] = run_auto_consult(case_dir=case_dir, case_id=case_id, question=q_body)
+        common["verify"] = verify_mod.verify_brief(storage.stage_path(case_dir, "consult"))
+        return common
+
+    common["auto"] = False
+    common["guide"] = stages.consult_guide()
+    common["input"] = q_path
+    common["tools"] = ["law_search", "verify_article", "precedent_search", "verify_case", "verify_brief"]
+    common["save_as"] = config.STAGE_FILES["consult"]
+    common["지침"] = ("consult_guide 를 따라 질문을 분석하고, law_search/verify_article·precedent_search/verify_case 로 "
+                     "근거를 검증한 뒤 IRAC 상담의견(+면책 고지)을 작성해 save_stage(stage='consult')로 저장하라.")
+    return common
